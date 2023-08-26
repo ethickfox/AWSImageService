@@ -1,0 +1,137 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: CloudFormation homework
+Resources:
+  ImagesBucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      BucketName: !Ref ImageBucketName
+    DeletionPolicy: Delete
+  LaunchTemplate:
+    Type: 'AWS::EC2::LaunchTemplate'
+    Properties:
+      LaunchTemplateName: !Join
+        - '-'
+        - - !Ref 'AWS::StackName'
+          - LaunchTemplate
+      LaunchTemplateData:
+        ImageId: !Ref TemplateImageId
+        InstanceType: !Ref InstanceTypeParam
+  AutoScalingGroup:
+    Type: 'AWS::AutoScaling::AutoScalingGroup'
+    Properties:
+      AutoScalingGroupName: !Join
+        - '-'
+        - - !Ref 'AWS::StackName'
+          - AutoScalingGroup
+      LaunchTemplate:
+        LaunchTemplateId: !Ref LaunchTemplate
+        Version: !GetAtt
+          - LaunchTemplate
+          - LatestVersionNumber
+      MaxSize: 3
+      MinSize: 1
+      DesiredCapacity: 2
+      VPCZoneIdentifier:
+        - Fn::ImportValue: !Join
+          - '-'
+          - - !Ref NetworkStackNameParameter
+            - PublicSubnetA
+        - Fn::ImportValue: !Join
+            - '-'
+            - - !Ref NetworkStackNameParameter
+              - PublicSubnetB
+      TargetGroupARNs:
+        - !Ref LBTargetGroup
+      Tags:
+        - Key: Environment
+          Value: Production
+          PropagateAtLaunch: 'true'
+  AutoScalingPolicy:
+    Type: 'AWS::AutoScaling::ScalingPolicy'
+    DependsOn: AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: !Join
+        - '-'
+        - - !Ref 'AWS::StackName'
+          - AutoScalingGroup
+      PolicyType: TargetTrackingScaling
+      TargetTrackingConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ASGAverageCPUUtilization
+        TargetValue: !Ref CPUPolicyTargetValue
+    DeletionPolicy: Delete
+  LoadBalancer:
+    Type: 'AWS::ElasticLoadBalancingV2::LoadBalancer'
+    Properties:
+      Subnets:
+        - Fn::ImportValue: !Join
+            - '-'
+            - - !Ref NetworkStackNameParameter
+              - PublicSubnetA
+        - Fn::ImportValue: !Join
+            - '-'
+            - - !Ref NetworkStackNameParameter
+              - PublicSubnetB
+      Tags:
+        - Key: Name
+          Value: !Join
+            - '-'
+            - - !Ref 'AWS::StackName'
+              - LoadBalancer
+    DeletionPolicy: Delete
+  LBListener:
+    Type: 'AWS::ElasticLoadBalancingV2::Listener'
+    Properties:
+      DefaultActions:
+        - Type: redirect
+          RedirectConfig:
+            Protocol: HTTPS
+            Port: '8080'
+            Host: '#{host}'
+            Path: '/#{path}'
+            Query: '#{query}'
+            StatusCode: HTTP_301
+      LoadBalancerArn: !Ref LoadBalancer
+      Port: 80
+      Protocol: HTTP
+  LBTargetGroup:
+    Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'
+    DependsOn: LoadBalancer
+    Properties:
+      VpcId:
+        Fn::ImportValue: !Join
+          - '-'
+          - - !Ref NetworkStackNameParameter
+            - VPC
+      Name: !Join
+        - '-'
+        - - !Ref 'AWS::StackName'
+          - TargetGroup
+      Protocol: HTTP
+      Port: 80
+Parameters:
+  ImageBucketName:
+    Description: Name For Bucket with Images
+    Type: String
+    Default: nkatyshev-images-bucket
+  TemplateImageId:
+    Description: Name For Bucket with Images
+    Type: 'AWS::EC2::Image::Id'
+    Default: ami-0f3d713e731518312
+  InstanceTypeParam:
+    Description: EC2 instance type
+    Type: String
+    Default: t3.micro
+    AllowedValues:
+      - t1.micro
+      - t2.micro
+      - t3.micro
+    ConstraintDescription: must be a valid EC2 instance type.
+  CPUPolicyTargetValue:
+    Description: The target utilization for the CPU metric
+    Type: String
+    Default: '50'
+  NetworkStackNameParameter:
+    Type: String
+    Description: Name of Previously Created Network
+    Default: MyNetwork

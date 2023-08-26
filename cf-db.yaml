@@ -1,0 +1,31 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: CloudFormation homework
+Resources:
+  MyInstance:
+    Type: "AWS::RDS::DBInstance"
+    Properties:
+      DBSubnetGroupName:
+        Fn::ImportValue: !Join
+          - '-'
+          - - !Ref NetworkStackNameParameter
+            - PrivateSubnetGroup
+      MasterUsername: !Ref "DBUsername"
+      MasterUserPassword: !Ref "DBPassword"
+      DBInstanceClass: "db.t3.micro"
+      PubliclyAccessible: false
+      Engine: "mysql"
+      AllocatedStorage: 5
+      AutoMinorVersionUpgrade: false
+Parameters:
+  DBUsername:
+    Description: username
+    Type: String
+    Default: 'root'
+  DBPassword:
+    Description: password
+    Type: String
+    MinLength: '8'
+  NetworkStackNameParameter:
+    Type: String
+    Description: Name of Previously Created Network
+    Default: MyNetwork

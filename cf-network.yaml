@@ -1,0 +1,214 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: CloudFormation homework
+Resources:
+  VPC:
+    Type: 'AWS::EC2::VPC'
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Join
+            - '-'
+            - - !Ref 'AWS::StackName'
+              - Network
+    DeletionPolicy: Delete
+  PublicSubnetA:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      CidrBlock: 10.0.11.0/24
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select
+        - 0
+        - !GetAZs eu-north-1
+      Tags:
+        - Key: Name
+          Value: !Join
+            - '-'
+            - - !Ref 'AWS::StackName'
+              - PublicSubnet
+              - A
+    DeletionPolicy: Delete
+  PublicSubnetB:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      CidrBlock: 10.0.13.0/24
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select
+        - 1
+        - !GetAZs eu-north-1
+      Tags:
+        - Key: Name
+          Value: !Join
+            - '-'
+            - - !Ref 'AWS::StackName'
+              - PublicSubnet
+              - B
+    DeletionPolicy: Delete
+  PrivateSubnetA:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      CidrBlock: 10.0.14.0/24
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select
+        - 0
+        - !GetAZs eu-north-1
+      Tags:
+        - Key: Name
+          Value: !Join
+            - '-'
+            - - !Ref 'AWS::StackName'
+              - PrivateSubnet
+              - A
+    DeletionPolicy: Delete
+  PrivateSubnetB:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      CidrBlock: 10.0.15.0/24
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select
+        - 1
+        - !GetAZs eu-north-1
+      Tags:
+        - Key: Name
+          Value: !Join
+            - '-'
+            - - !Ref 'AWS::StackName'
+              - PrivateSubnet
+              - B
+    DeletionPolicy: Delete
+  InternetGateway:
+    Type: 'AWS::EC2::InternetGateway'
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Join
+            - '-'
+            - - !Ref 'AWS::StackName'
+              - InternetGateway
+    DeletionPolicy: Delete
+  GatewayAttachement:
+    Type: 'AWS::EC2::VPCGatewayAttachment'
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+    DeletionPolicy: Delete
+  PublicRoutingTable:
+    Type: 'AWS::EC2::RouteTable'
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Join
+            - '-'
+            - - !Ref 'AWS::StackName'
+              - PublicRouteTable
+    DeletionPolicy: Delete
+  Route:
+    Type: 'AWS::EC2::Route'
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      RouteTableId: !Ref PublicRoutingTable
+      GatewayId: !Ref InternetGateway
+    DependsOn: InternetGateway
+    DeletionPolicy: Delete
+  publicSubnetAAssociation:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref PublicSubnetA
+      RouteTableId: !Ref PublicRoutingTable
+    DeletionPolicy: Delete
+  publicSubnetBAssociation:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref PublicSubnetB
+      RouteTableId: !Ref PublicRoutingTable
+    DeletionPolicy: Delete
+  SecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: Security group for EC2
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Join
+            - '-'
+            - - !Ref 'AWS::StackName'
+              - SecGr1
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 8080
+          ToPort: 8080
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref OwnerIP
+  SubnetGroup:
+    Type: "AWS::RDS::DBSubnetGroup"
+    Properties:
+      DBSubnetGroupName: "subnetgroup"
+      DBSubnetGroupDescription: "Subnet Group"
+      SubnetIds:
+        - !Ref "PublicSubnetA"
+        - !Ref "PublicSubnetB"
+Parameters:
+  OwnerIP:
+    Description: The IP address range that can be used to SSH to the EC2 instances
+    Type: String
+    MinLength: '9'
+    MaxLength: '18'
+    Default: 84.15.185.175/32
+    AllowedPattern: '(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})'
+    ConstraintDescription: must be a valid IP CIDR range of the form x.x.x.x/x.
+Outputs:
+  VPC:
+    Description: VPC used by web servers
+    Value:
+      Ref: VPC
+    Export:
+      Name: !Join
+        - '-'
+        - - !Ref 'AWS::StackName'
+          - VPC
+  PublicSubnetA:
+    Description: Public Subnet A
+    Value:
+      Ref: PublicSubnetA
+    Export:
+      Name: !Join
+        - '-'
+        - - !Ref 'AWS::StackName'
+          - PublicSubnetA
+  PublicSubnetB:
+    Description: Public Subnet B
+    Value:
+      Ref: PublicSubnetB
+    Export:
+      Name: !Join
+        - '-'
+        - - !Ref 'AWS::StackName'
+          - PublicSubnetB
+  PrivateSubnetA:
+    Description: Private Subnet A
+    Value:
+      Ref: PrivateSubnetA
+    Export:
+      Name: !Join
+        - '-'
+        - - !Ref 'AWS::StackName'
+          - PrivateSubnetA
+  PrivateSubnetGroup:
+    Description: Private Subnet Group
+    Value:
+      Ref: SubnetGroup
+    Export:
+      Name: !Join
+        - '-'
+        - - !Ref 'AWS::StackName'
+          - PrivateSubnetGroup
